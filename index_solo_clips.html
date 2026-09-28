@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vuelvo enseguida</title>
+<style>
+:root{--orange:#ff6a00;--orange2:#ff8b1f;--bg:#08090b}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08090b;color:#fff;font-family:Arial,Helvetica,sans-serif}
+body{position:relative;background:radial-gradient(circle at 50% 35%,rgba(255,106,0,.035),transparent 40%),linear-gradient(180deg,#0a0b0e 0%,#08090b 100%)}
+body:before,body:after{content:"";position:fixed;inset:-20%;pointer-events:none;opacity:.8}
+body:before{background:linear-gradient(115deg,transparent 0 46%,rgba(255,106,0,.07) 46.3% 46.8%,transparent 47.1%),linear-gradient(115deg,transparent 0 55%,rgba(255,106,0,.035) 55.3% 55.6%,transparent 55.9%);animation:moveA 22s linear infinite}
+body:after{background:linear-gradient(295deg,transparent 0 52%,rgba(255,106,0,.045) 52.2% 52.6%,transparent 52.9%);animation:moveB 28s linear infinite}
+@keyframes moveA{to{transform:translate3d(5%,-2%,0)}} @keyframes moveB{to{transform:translate3d(-4%,3%,0)}}
+.frame{width:100vw;height:100vh;padding:4.2vh 4.7vw 4.5vh;display:grid;grid-template-rows:auto 1fr;gap:2.7vh}
+.top{position:relative;min-height:15.5vh;border-radius:22px;border:1px solid rgba(255,255,255,.065);background:linear-gradient(180deg,rgba(22,24,29,.98),rgba(13,15,19,.98));box-shadow:0 20px 60px rgba(0,0,0,.38);overflow:hidden;display:flex;align-items:center;justify-content:center;padding:2vh 3vw}
+.top:before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(180deg,var(--orange2),var(--orange));box-shadow:0 0 28px rgba(255,106,0,.25)}
+.title{position:relative;z-index:1;margin:0;font-weight:900;letter-spacing:-.04em;font-size:clamp(44px,5.3vw,102px);line-height:.95;text-transform:uppercase;text-align:center;text-shadow:0 3px 25px rgba(0,0,0,.45)}
+.player-shell{min-height:0;position:relative;overflow:hidden;border-radius:26px;background:#000;border:1px solid rgba(255,255,255,.075);box-shadow:0 28px 85px rgba(0,0,0,.58)}
+.player-shell:before,.player-shell:after{
+  content:"";
+  position:absolute;
+  z-index:8;
+  left:0;right:0;
+  pointer-events:none;
+  background:#000;
+}
+.player-shell:before{top:0;height:1.2%}
+.player-shell:after{bottom:0;height:1.5%}
+iframe{
+  position:absolute;
+  left:-1.5%;
+  top:-9%;
+  width:103%;
+  height:118%;
+  border:0;
+  background:#000;
+  pointer-events:none;
+}
+.loading{position:absolute;z-index:10;inset:0;display:flex;align-items:center;justify-content:center;background:#08090b;color:rgba(255,255,255,.72);font-size:clamp(14px,1.2vw,22px);letter-spacing:.04em}
+.loading.hidden{display:none}
+.error{position:absolute;z-index:20;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:40px;background:#08090b;color:#fff}
+.error.show{display:flex}.error-box{max-width:700px;padding:36px;border-radius:20px;background:#111317;border:1px solid rgba(255,255,255,.08)}
+.error-box strong{display:block;font-size:28px;margin-bottom:12px}.error-box span{color:#c9cbd0;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="frame">
+  <section class="top"><h1 class="title">VUELVO ENSEGUIDA</h1></section>
+  <section class="player-shell">
+    <iframe id="player" allow="autoplay; fullscreen" allowfullscreen></iframe>
+    <div class="loading" id="loading">Cargando clips…</div>
+    <div class="error" id="error"><div class="error-box"><strong>No se han podido cargar los clips</strong><span id="errorText">Revisa la conexión con Twitch.</span></div></div>
+  </section>
+</div>
+<script>
+const CHANNEL="quemassteda";
+const CLIENT_ID="ksrqgve63aqdltq740gik0w1at8nyo";
+const TOKEN_KEY="qst_meld_oauth_token";
+const STATE_KEY="qst_oauth_state";
+const player=document.getElementById("player"),loading=document.getElementById("loading"),errorBox=document.getElementById("error"),errorText=document.getElementById("errorText");
+let clips=[],queue=[],pos=0,timer=null;
+
+function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function randomState(){const a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a,x=>x.toString(16)).join("")}
+function redirectUri(){return location.origin+location.pathname}
+function cleanUrl(){history.replaceState(null,"",location.pathname)}
+function parseToken(){
+  const h=new URLSearchParams(location.hash.replace(/^#/,""));
+  const token=h.get("access_token"),state=h.get("state");
+  if(token){
+    const expected=sessionStorage.getItem(STATE_KEY);
+    if(expected&&state!==expected) throw new Error("La autorización de Twitch no coincide con esta sesión.");
+    localStorage.setItem(TOKEN_KEY,token);sessionStorage.removeItem(STATE_KEY);cleanUrl();return token;
+  }
+  const q=new URLSearchParams(location.search);
+  if(q.get("error")) throw new Error(q.get("error_description")||q.get("error"));
+  return localStorage.getItem(TOKEN_KEY);
+}
+function authorize(){
+  const state=randomState();sessionStorage.setItem(STATE_KEY,state);
+  const p=new URLSearchParams({response_type:"token",client_id:CLIENT_ID,redirect_uri:redirectUri(),scope:"",state});
+  location.replace("https://id.twitch.tv/oauth2/authorize?"+p.toString());
+}
+async function validateToken(token){
+  const r=await fetch("https://id.twitch.tv/oauth2/validate",{headers:{Authorization:"OAuth "+token}});
+  if(!r.ok)return false;const j=await r.json();return j.client_id===CLIENT_ID;
+}
+async function helix(path,token){
+  const r=await fetch("https://api.twitch.tv/helix/"+path,{headers:{"Client-Id":CLIENT_ID,"Authorization":"Bearer "+token}});
+  const j=await r.json();if(!r.ok)throw new Error(j.message||("Twitch API HTTP "+r.status));return j;
+}
+async function getChannelId(token){
+  const j=await helix("users?login="+encodeURIComponent(CHANNEL),token);
+  if(!j.data?.length)throw new Error("No se encuentra el canal.");return j.data[0].id;
+}
+async function getClips(token,broadcasterId){
+  const j=await helix("clips?broadcaster_id="+encodeURIComponent(broadcasterId)+"&first=100",token);
+  if(!j.data?.length)throw new Error("Twitch no ha devuelto clips.");return j.data;
+}
+function clipEmbedUrl(clip){
+  const p=new URLSearchParams({clip:clip.id,parent:location.hostname,autoplay:"true",muted:"false"});
+  return "https://clips.twitch.tv/embed?"+p.toString();
+}
+function playNext(){
+  clearTimeout(timer);if(!queue.length)return;
+  if(pos>=queue.length){queue=shuffle(clips);pos=0}
+  const clip=queue[pos++];player.src=clipEmbedUrl(clip);
+  const duration=Math.max(4,Number(clip.duration||15));timer=setTimeout(playNext,(duration+1.25)*1000);
+}
+function fail(e){console.error(e);loading.classList.add("hidden");errorBox.classList.add("show");errorText.textContent=String(e?.message||e)}
+(async()=>{
+  try{
+    let token=parseToken();
+    if(!token){authorize();return}
+    const valid=await validateToken(token);
+    if(!valid){localStorage.removeItem(TOKEN_KEY);authorize();return}
+    const channelId=await getChannelId(token);
+    clips=await getClips(token,channelId);
+    queue=shuffle(clips);
+    loading.classList.add("hidden");
+    playNext();
+  }catch(e){fail(e)}
+})();
+</script>
+</body>
+</html>
