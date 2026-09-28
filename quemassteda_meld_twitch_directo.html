@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QUEMASSTEDA · BRB Twitch Clips</title>
+<style>
+:root{--orange:#ff6a00;--orange2:#ff9b3d;--bg:#08090b;--panel:#111319;--text:#fff;--muted:#b6bac4}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#08090b;color:#fff;font-family:Inter,Arial,Helvetica,sans-serif}
+body:before,body:after{content:"";position:fixed;inset:-25%;pointer-events:none;background:
+linear-gradient(115deg,transparent 0 46%,rgba(255,106,0,.08) 46.2% 46.7%,transparent 47% 100%),
+linear-gradient(295deg,transparent 0 55%,rgba(255,106,0,.05) 55.2% 55.8%,transparent 56% 100%);
+animation:drift 18s linear infinite}
+body:after{transform:scale(1.3) rotate(180deg);opacity:.5;animation-duration:28s}
+@keyframes drift{to{transform:translate3d(5%,-3%,0)}}
+.stage{height:100vh;width:100vw;padding:4.2vh 5vw;display:grid;grid-template-rows:auto 1fr;gap:2.8vh}
+.header{position:relative;background:linear-gradient(180deg,#15171d,#0d0f13);border:1px solid rgba(255,255,255,.07);
+border-radius:24px;padding:2.25vh 2.6vw;box-shadow:0 18px 60px rgba(0,0,0,.38);overflow:hidden}
+.header:before{content:"";position:absolute;left:0;top:0;bottom:0;width:8px;background:linear-gradient(#ff9b3d,#ff5700)}
+.kicker{font-size:clamp(14px,1.05vw,22px);letter-spacing:.24em;text-transform:uppercase;color:var(--orange2);font-weight:800;margin-bottom:.45vh}
+h1{margin:0;font-size:clamp(42px,5.5vw,104px);line-height:.95;letter-spacing:-.05em;font-weight:950}
+.sub{margin-top:1vh;color:var(--muted);font-size:clamp(15px,1.3vw,26px)}
+.playerWrap{min-height:0;position:relative;border-radius:28px;overflow:hidden;background:#020203;border:1px solid rgba(255,255,255,.08);
+box-shadow:0 28px 85px rgba(0,0,0,.58)}
+video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+.bottom{position:absolute;z-index:5;left:0;right:0;bottom:0;padding:5.5vh 2.4vw 2vh;background:linear-gradient(transparent,rgba(0,0,0,.88));pointer-events:none}
+.clipTitle{font-size:clamp(15px,1.45vw,28px);font-weight:800;text-shadow:0 2px 12px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;justify-content:space-between;gap:20px;color:#d3d5db;margin-top:.4vh;font-size:clamp(12px,.95vw,19px)}
+.progress{height:5px;background:rgba(255,255,255,.17);margin-top:1.2vh;border-radius:10px;overflow:hidden}
+.bar{height:100%;width:0;background:linear-gradient(90deg,var(--orange),var(--orange2))}
+.badge{position:absolute;right:1.6vw;top:1.6vh;z-index:6;background:rgba(9,10,12,.78);border:1px solid rgba(255,255,255,.09);
+padding:8px 12px;border-radius:999px;font-size:12px;color:#d9dce2}
+.status{position:absolute;z-index:10;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,#151820,#07080b 70%);
+text-align:center;padding:40px}
+.card{max-width:760px;padding:42px;border:1px solid rgba(255,255,255,.08);border-radius:24px;background:rgba(15,17,22,.94);box-shadow:0 24px 80px rgba(0,0,0,.4)}
+.logo{font-size:54px;margin-bottom:10px}.status h2{font-size:32px;margin:0 0 12px}.status p{color:#c7cbd3;line-height:1.55;margin:8px 0}
+.error{color:#ff8e8e!important;white-space:pre-wrap;font-size:13px}.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="stage">
+  <section class="header">
+    <div class="kicker">QUEMASSTEDA · TWITCH</div>
+    <h1>VUELVO ENSEGUIDA</h1>
+    <div class="sub">Mientras tanto, disfruta de algunos clips del canal ✦</div>
+  </section>
+
+  <section class="playerWrap">
+    <video id="video" playsinline autoplay></video>
+    <div class="badge" id="badge">Conectando directamente con Twitch…</div>
+
+    <div class="bottom">
+      <div class="clipTitle" id="clipTitle">Cargando clip…</div>
+      <div class="meta"><span id="clipMeta">@quemassteda</span><span id="counter"></span></div>
+      <div class="progress"><div class="bar" id="bar"></div></div>
+    </div>
+
+    <div class="status" id="status">
+      <div class="card">
+        <div class="logo">✦</div>
+        <h2 id="statusTitle">Cargando clips de Twitch…</h2>
+        <p id="statusText">Buscando directamente los clips de <b>quemassteda</b>.</p>
+        <p class="error" id="err"></p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const CHANNEL = "quemassteda";
+
+// Client-ID público utilizado por el cliente web de Twitch.
+// No es tu Client ID y no requiere login del usuario.
+const TWITCH_WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+
+// Operaciones GQL observadas actualmente en clientes compatibles con Twitch.
+const CLIPS_HASHES = [
+  "1cd671bfa12cec480499c087319f26d21925e9695d1f80225aae6a4354f23088",
+  "b73ad2bfaecfd30a9e6c28fada15bd97032c83ec77a0440766a56fe0bd632777"
+];
+const ACCESS_HASH = "993d9a5131f15a37bd16f32342c44ed1e0b1a9b968c6afdb662d2cddd595f6c5";
+
+const $ = s => document.querySelector(s);
+const video = $("#video"), status = $("#status"), err = $("#err"), badge = $("#badge");
+const titleEl = $("#clipTitle"), metaEl = $("#clipMeta"), counterEl = $("#counter"), bar = $("#bar");
+
+let clips = [], queue = [], pos = 0, busy = false;
+
+function shuffle(a){
+  a=[...a];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+  return a;
+}
+function showError(e){
+  console.error(e);
+  status.classList.remove("hidden");
+  $("#statusTitle").textContent="No he podido cargar los clips";
+  $("#statusText").textContent="Twitch ha rechazado o bloqueado la consulta directa.";
+  err.textContent=String(e?.message||e);
+  badge.textContent="Error de Twitch";
+}
+async function gql(payload){
+  const r = await fetch("https://gql.twitch.tv/gql",{
+    method:"POST",
+    mode:"cors",
+    credentials:"omit",
+    headers:{
+      "Client-ID":TWITCH_WEB_CLIENT_ID,
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify(payload)
+  });
+  const text=await r.text();
+  let j;
+  try{j=JSON.parse(text)}catch(_){throw new Error("Respuesta no válida de Twitch (HTTP "+r.status+")")}
+  if(!r.ok) throw new Error("Twitch GQL HTTP "+r.status+": "+(j?.message||"error"));
+  if(j?.errors?.length) throw new Error(j.errors[0]?.message || "Error GraphQL de Twitch");
+  return j;
+}
+
+async function fetchClipsWithHash(hash, filter){
+  const payload={
+    operationName:"ClipsCards__User",
+    variables:{
+      login:CHANNEL,
+      limit:20,
+      criteria:{filter}
+    },
+    extensions:{
+      persistedQuery:{version:1,sha256Hash:hash}
+    }
+  };
+  const j=await gql(payload);
+  const edges=j?.data?.user?.clips?.edges || [];
+  return edges.map(e=>e?.node).filter(Boolean);
+}
+
+async function getClips(){
+  const seen=new Map();
+  let lastError=null;
+
+  for(const hash of CLIPS_HASHES){
+    for(const filter of ["ALL_TIME","LAST_MONTH","LAST_WEEK"]){
+      try{
+        const list=await fetchClipsWithHash(hash,filter);
+        for(const c of list){
+          const key=c.slug || c.id;
+          if(key && !seen.has(key)) seen.set(key,c);
+        }
+        if(seen.size>=12) return [...seen.values()];
+      }catch(e){
+        lastError=e;
+        console.warn("Consulta de clips fallida",hash,filter,e);
+      }
+    }
+  }
+
+  if(seen.size) return [...seen.values()];
+  throw lastError || new Error("Twitch no devolvió clips para "+CHANNEL+".");
+}
+
+async function signedClipUrl(slug){
+  const payload={
+    operationName:"VideoAccessToken_Clip",
+    variables:{slug,platform:"web"},
+    extensions:{
+      persistedQuery:{version:1,sha256Hash:ACCESS_HASH}
+    }
+  };
+
+  const j=await gql(payload);
+  const clip=j?.data?.clip;
+  if(!clip) throw new Error("Twitch no devolvió el vídeo del clip "+slug);
+
+  const qualities=(clip.videoQualities||[]).filter(q=>q?.sourceURL);
+  if(!qualities.length) throw new Error("El clip "+slug+" no tiene vídeo reproducible.");
+
+  qualities.sort((a,b)=>(parseInt(b.quality)||0)-(parseInt(a.quality)||0));
+  const q=qualities[0];
+  const token=clip.playbackAccessToken;
+
+  if(!token?.signature || !token?.value) return q.sourceURL;
+
+  const sep=q.sourceURL.includes("?")?"&":"?";
+  return q.sourceURL+sep+"sig="+encodeURIComponent(token.signature)+"&token="+encodeURIComponent(token.value);
+}
+
+async function playNext(){
+  if(busy) return;
+  busy=true;
+  try{
+    if(!queue.length) throw new Error("No hay clips en la cola.");
+
+    let lastError=null;
+    const tries=Math.min(10,queue.length);
+
+    for(let attempt=0;attempt<tries;attempt++){
+      if(pos>=queue.length){queue=shuffle(clips);pos=0}
+
+      const clip=queue[pos++];
+      const slug=clip.slug || clip.id;
+      counterEl.textContent=pos+" / "+queue.length;
+      titleEl.textContent=clip.title || "Clip de quemassteda";
+      metaEl.textContent="@"+CHANNEL+" · "+Number(clip.viewCount||0).toLocaleString("es-ES")+" visualizaciones";
+      badge.textContent="Preparando clip de Twitch…";
+      bar.style.width="0%";
+
+      try{
+        const url=await signedClipUrl(slug);
+        video.src=url;
+        video.load();
+
+        try{
+          video.muted=false;
+          await video.play();
+        }catch(_){
+          video.muted=true;
+          badge.textContent="Twitch · autoplay con audio bloqueado";
+          await video.play();
+        }
+
+        badge.textContent="Clip directo de Twitch";
+        busy=false;
+        return;
+      }catch(e){
+        console.warn("Clip omitido:",slug,e);
+        lastError=e;
+      }
+    }
+    throw lastError || new Error("No se pudo reproducir ninguno de los clips.");
+  }catch(e){
+    showError(e);
+  }finally{
+    busy=false;
+  }
+}
+
+video.addEventListener("ended",()=>playNext());
+video.addEventListener("error",()=>{
+  console.warn("Error del elemento video:",video.error);
+  setTimeout(()=>playNext(),800);
+});
+video.addEventListener("timeupdate",()=>{
+  if(video.duration && Number.isFinite(video.duration)){
+    bar.style.width=Math.min(100,(video.currentTime/video.duration)*100)+"%";
+  }
+});
+
+(async()=>{
+  try{
+    badge.textContent="Buscando clips en Twitch…";
+    clips=await getClips();
+    if(!clips.length) throw new Error("No se encontraron clips.");
+    queue=shuffle(clips);
+    status.classList.add("hidden");
+    badge.textContent=clips.length+" clips encontrados";
+    await playNext();
+  }catch(e){
+    showError(e);
+  }
+})();
+</script>
+</body>
+</html>
